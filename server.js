@@ -89,6 +89,30 @@ function promptUserForOperation() {
                     client.end();
                 })
             }
+            else if(response.operation === 'Add Department'){
+                inquirer
+                .prompt([{
+                    type:'text',
+                    message:'What is the name of the department?',
+                    name:'department'
+                }])
+                .then(response =>{
+                    if(response.department){
+                        client.query(department.addDepartment(),[response.department],(err,res)=>{
+                            if(err){
+                                console.error(err)
+                                return;
+                            }
+                            console.log(`Added ${response.department} to the database`);
+                            client.end();
+                        })
+                    }
+                    else{
+                        // If no department, end the client connection
+                        client.end();
+                    }
+                })
+            }
             else{
                 client.end();
             }
