@@ -12,6 +12,9 @@ const department = new Department();
 // npm package of displaying tables in cli
 const Table = require('cli-table');
 
+// Global variables
+const availableDepartments = [];
+
 // Define the operations array, user would like to perform
 const operations = ['View All Employees',
     'Add Employee',
@@ -69,9 +72,9 @@ function promptUserForOperation() {
                     client.end();
                 })
             }
-            else if(response.operation === 'View All Roles'){
-                client.query(role.viewRoles(),(err,res) =>{
-                    if(err){
+            else if (response.operation === 'View All Roles') {
+                client.query(role.viewRoles(), (err, res) => {
+                    if (err) {
                         console.error(err)
                         return;
                     }
@@ -79,9 +82,9 @@ function promptUserForOperation() {
                     client.end();
                 })
             }
-            else if(response.operation === 'View All Departments'){
-                client.query(department.viewDepartments(),(err,res)=>{
-                    if(err){
+            else if (response.operation === 'View All Departments') {
+                client.query(department.viewDepartments(), (err, res) => {
+                    if (err) {
                         console.error(err)
                         return;
                     }
@@ -89,31 +92,84 @@ function promptUserForOperation() {
                     client.end();
                 })
             }
-            else if(response.operation === 'Add Department'){
+            else if (response.operation === 'Add Department') {
                 inquirer
-                .prompt([{
-                    type:'text',
-                    message:'What is the name of the department?',
-                    name:'department'
-                }])
-                .then(response =>{
-                    if(response.department){
-                        client.query(department.addDepartment(),[response.department],(err,res)=>{
-                            if(err){
-                                console.error(err)
-                                return;
-                            }
-                            console.log(`Added ${response.department} to the database`);
+                    .prompt([{
+                        type: 'text',
+                        message: 'What is the name of the department?',
+                        name: 'department'
+                    }])
+                    .then(response => {
+                        if (response.department) {
+                            client.query(department.addDepartment(), [response.department], (err, res) => {
+                                if (err) {
+                                    console.error(err)
+                                    return;
+                                }
+                                console.log(`Added ${response.department} to the database`);
+                                client.end();
+                            })
+                        }
+                        else {
+                            // If no department, end the client connection
                             client.end();
-                        })
-                    }
-                    else{
-                        // If no department, end the client connection
-                        client.end();
+                        }
+                    })
+            } else if (response.operation === 'Add Role') {
+                // Get available departments to associate new role
+                client.query(department.getDepartments(), (err, res) => {
+                    if (err) {
+                        console.error(err)
+                    } else {
+                        res.rows.forEach(row => availableDepartments.push(row));
                     }
                 })
+                inquirer
+                    .prompt([
+                        {
+                            type: "text",
+                            message: "What is the name of the role?",
+                            name: "role"
+                        },
+                        {
+                            type: "decimal",
+                            message: "What is the salary of the role?",
+                            name: "salary"
+                        },
+                        {
+                            type: "list",
+                            message: "Which department does the role belong to?",
+                            name: "department",
+                            choices: availableDepartments
+                        }
+                    ])
+                    .then(response => {
+                        if (response.role && response.salary && response.department) {
+                            client.query(department.getDepartmentID(), [response.department], (err, res) => {
+                                if (err) {
+                                    console.error(err)
+                                    return;
+                                } else {
+                                    response.department = res.rows[0].id;
+                                    if (response.department) {
+                                        const valuesToInsert = [response.role, response.salary, response.department];
+                                        client.query(role.addRole(), valuesToInsert, (err, res) => {
+                                            if (err) {
+                                                console.error(err)
+                                                return;
+                                            } else {
+                                                console.log(`${response.role} added to database`);
+                                                client.end();
+                                            }
+                                        })
+                                    }
+                                }
+                            })
+                        }
+                    })
+
             }
-            else{
+            else {
                 client.end();
             }
         });
