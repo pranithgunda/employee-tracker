@@ -13,9 +13,9 @@ const department = new Department();
 const Table = require('cli-table');
 
 // Global variables
-const availableDepartments = [];
-const availableRoles = [];
-const availableEmployees = [];
+let availableDepartments = [];
+let availableRoles = [];
+let availableEmployees = [];
 
 // Define the operations array, user would like to perform
 const operations = ['View All Employees',
@@ -129,62 +129,139 @@ function promptUserForOperation() {
                     .then(response => {
                         if (response.role && response.salary && response.department) {
                             client.query(department.getDepartmentID(), [response.department], (err, res) => {
-                                    response.department = res.rows[0].id;
-                                    if (response.department) {
-                                        const valuesToInsert = [response.role, response.salary, response.department];
-                                        client.query(role.addRole(), valuesToInsert, (err, res) => {
-                                                console.log(`${response.role} added to database`);
-                                                promptUserForOperation();
-                                            })
-                                    }
-                                })
+                                response.department = res.rows[0].id;
+                                if (response.department) {
+                                    const valuesToInsert = [response.role, response.salary, response.department];
+                                    client.query(role.addRole(), valuesToInsert, (err, res) => {
+                                        console.log(`${response.role} added to database`);
+                                        promptUserForOperation();
+                                    })
+                                }
+                            })
                         }
                     })
 
             } else if (response.operation === 'Add Employee') {
                 // Get available departments to associate with new employee
                 client.query(role.getRoles(), (err, res) => {
-                        res.rows.forEach((row) => availableRoles.push(row.title));
-                        // Get available employees for manager selection
-                        client.query(employee.getEmployeeNames(), (err, res) => {
-                                res.rows.forEach((row) => availableEmployees.push(row.employee_name));
-                                availableEmployees.push({ employee_name: 'None' });
-                                inquirer
-                                    .prompt([
-                                        {
-                                            type: "text",
-                                            message: "What is employee's first name?",
-                                            name: "first_name"
-                                        },
-                                        {
-                                            type: "text",
-                                            message: "What is employee's last name?",
-                                            name: "last_name"
-                                        },
-                                        {
-                                            type: "list",
-                                            message: "What is the employee's role?",
-                                            name: "role",
-                                            choices: availableRoles,
-                                        },
-                                        {
-                                            type: "list",
-                                            message: "Who is employee's manager?",
-                                            name: "manager",
-                                            choices: availableEmployees,
+                    // reset available roles to null
+                    availableRoles = [];
+                    res.rows.forEach((row) => availableRoles.push(row.title));
+                    // Get available employees for manager selection
+                    client.query(employee.getEmployeeNames(), (err, res) => {
+                        // reset available employees to null
+                        availableEmployees = [];
+                        availableEmployees.push('None');
+                        res.rows.forEach((row) => availableEmployees.push(row.employee_name));
+                        inquirer
+                            .prompt([
+                                {
+                                    type: "text",
+                                    message: "What is employee's first name?",
+                                    name: "first_name"
+                                },
+                                {
+                                    type: "text",
+                                    message: "What is employee's last name?",
+                                    name: "last_name"
+                                },
+                                {
+                                    type: "list",
+                                    message: "What is the employee's role?",
+                                    name: "role_id",
+                                    choices: availableRoles,
+                                },
+                                {
+                                    type: "list",
+                                    message: "Who is employee's manager?",
+                                    name: "manager_id",
+                                    choices: availableEmployees,
+                                }
+                            ])
+                            .then(response => {
+                                if (response.first_name && response.last_name && response.role_id) {
+                                    client.query(role.getRoleId(), [response.role_id], (err, res) => {
+                                        response.role_id = res.rows[0].id
+                                        if (response.role_id) {
+                                            if (response.manager_id && response.manager_id !== 'None') {
+                                                client.query(employee.getEmployeeId(), [response.manager_id], (err, res) => {
+                                                    response.manager_id = res.rows[0].id
+                                                    if (response.manager_id) {
+                                                        client.query(employee.addEmployee(), [response.first_name, response.last_name, response.role_id, response.manager_id], (err, res) => {
+                                                            console.log(`Employee ${response.first_name} ${response.last_name} added to database`)
+                                                            promptUserForOperation();
+                                                        })
+                                                    }
+                                                })
+
+                                            } else {
+                                                client.query(employee.addEmployee(), [response.first_name, response.last_name, response.role_id, null], (err, res) => {
+                                                    console.log(`Employee ${response.first_name} ${response.last_name} added to database`)
+                                                    promptUserForOperation();
+                                                })
+                                            }
                                         }
-                                    ])
-                                    .then(response => {
-                                        console.log(response);
-                                        promptUserForOperation();
                                     })
+                                }
                             })
                     })
-            }
+                })
+            } else if (response.operation === 'Update Employee Role') {
+                // Get available employees
+                client.query(employee.getEmployeeNames(), (err, res) => {
+                    // reset array to empty
+                    availableEmployees = [];
+                    res.rows.forEach((row) => availableEmployees.push(row.employee_name));
+                // Get available roles
+                client.query(role.getRoles(),(err,res)=>{
+                    // reset array to empty
+                    availableRoles=[];
+                    res.rows.forEach((row) => availableRoles.push(row.title));
+                    inquirer
+                    .prompt([
+                        {
+                         type:"list",
+                         message:"Which employee's role do you want to update? ",
+                         name:"employee_id",
+                         choices:availableEmployees   
+                        },
+                        {
+                            type:"list",
+                            message:"Which role do you want to assign the selected employee?",
+                            name:"role_id",
+                            choices:availableRoles
+                        }
+                    ])
+                    .then(response =>{
+                        if(response.employee_id && response.role_id){
+                            client.query(employee.getEmployeeId(),[response.employee_id],(err,res)=>{
+                                response.employee_id = res.rows[0].id
+                                if(response.employee_id){
+                                    client.query(role.getRoleId(),[response.role_id],(err,res)=>{
+                                        response.role_id = res.rows[0].id
+                                        if(response.role_id){
+                                            client.query(employee.updateEmployeeRole(),[response.role_id,response.employee_id],(err,res)=>{
+                                                console.log('Updated employees role');
+                                                promptUserForOperation();
+                                            })
+                                        }
+                                    })
+                                }
+                            })
+
+                        }
+                        else{
+                            console.log('Please select both employee and role to update')
+                        }
+                    })
+
+
+                })}
+                )}
             else {
-                // If user selects quit, end the connection
-                client.end();
-            }
+                        // If user selects quit, end the connection
+                        client.end();
+                    }
         })
         .catch(error => {
             // Handle all the errors from .then and .query methods
