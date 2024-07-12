@@ -14,6 +14,8 @@ const Table = require('cli-table');
 
 // Global variables
 const availableDepartments = [];
+const availableRoles = [];
+const availableEmployees = [];
 
 // Define the operations array, user would like to perform
 const operations = ['View All Employees',
@@ -64,32 +66,20 @@ function promptUserForOperation() {
         .then(response => {
             if (response.operation === 'View All Employees') {
                 client.query(employee.viewEmployees(), (err, res) => {
-                    if (err) {
-                        console.error(err);
-                        return;
-                    }
                     console.log(displayArrayAsTable(res.rows));
-                    client.end();
+                    promptUserForOperation();
                 })
             }
             else if (response.operation === 'View All Roles') {
                 client.query(role.viewRoles(), (err, res) => {
-                    if (err) {
-                        console.error(err)
-                        return;
-                    }
                     console.log(displayArrayAsTable(res.rows));
-                    client.end();
+                    promptUserForOperation();
                 })
             }
             else if (response.operation === 'View All Departments') {
                 client.query(department.viewDepartments(), (err, res) => {
-                    if (err) {
-                        console.error(err)
-                        return;
-                    }
                     console.log(displayArrayAsTable(res.rows));
-                    client.end();
+                    promptUserForOperation();
                 })
             }
             else if (response.operation === 'Add Department') {
@@ -102,27 +92,20 @@ function promptUserForOperation() {
                     .then(response => {
                         if (response.department) {
                             client.query(department.addDepartment(), [response.department], (err, res) => {
-                                if (err) {
-                                    console.error(err)
-                                    return;
-                                }
                                 console.log(`Added ${response.department} to the database`);
-                                client.end();
+                                promptUserForOperation();
                             })
                         }
                         else {
-                            // If no department, end the client connection
-                            client.end();
+                            // If no department, log to console and prompt again
+                            console.log('Department not provided to add in database');
+                            promptUserForOperation();
                         }
                     })
             } else if (response.operation === 'Add Role') {
                 // Get available departments to associate new role
                 client.query(department.getDepartments(), (err, res) => {
-                    if (err) {
-                        console.error(err)
-                    } else {
-                        res.rows.forEach(row => availableDepartments.push(row));
-                    }
+                    res.rows.forEach(row => availableDepartments.push(row));
                 })
                 inquirer
                     .prompt([
@@ -146,42 +129,77 @@ function promptUserForOperation() {
                     .then(response => {
                         if (response.role && response.salary && response.department) {
                             client.query(department.getDepartmentID(), [response.department], (err, res) => {
-                                if (err) {
-                                    console.error(err)
-                                    return;
-                                } else {
                                     response.department = res.rows[0].id;
                                     if (response.department) {
                                         const valuesToInsert = [response.role, response.salary, response.department];
                                         client.query(role.addRole(), valuesToInsert, (err, res) => {
-                                            if (err) {
-                                                console.error(err)
-                                                return;
-                                            } else {
                                                 console.log(`${response.role} added to database`);
-                                                client.end();
-                                            }
-                                        })
+                                                promptUserForOperation();
+                                            })
                                     }
-                                }
-                            })
+                                })
                         }
                     })
 
+            } else if (response.operation === 'Add Employee') {
+                // Get available departments to associate with new employee
+                client.query(role.getRoles(), (err, res) => {
+                        res.rows.forEach((row) => availableRoles.push(row.title));
+                        // Get available employees for manager selection
+                        client.query(employee.getEmployeeNames(), (err, res) => {
+                                res.rows.forEach((row) => availableEmployees.push(row.employee_name));
+                                availableEmployees.push({ employee_name: 'None' });
+                                inquirer
+                                    .prompt([
+                                        {
+                                            type: "text",
+                                            message: "What is employee's first name?",
+                                            name: "first_name"
+                                        },
+                                        {
+                                            type: "text",
+                                            message: "What is employee's last name?",
+                                            name: "last_name"
+                                        },
+                                        {
+                                            type: "list",
+                                            message: "What is the employee's role?",
+                                            name: "role",
+                                            choices: availableRoles,
+                                        },
+                                        {
+                                            type: "list",
+                                            message: "Who is employee's manager?",
+                                            name: "manager",
+                                            choices: availableEmployees,
+                                        }
+                                    ])
+                                    .then(response => {
+                                        console.log(response);
+                                        promptUserForOperation();
+                                    })
+                            })
+                    })
             }
             else {
+                // If user selects quit, end the connection
                 client.end();
             }
-        });
+        })
+        .catch(error => {
+            // Handle all the errors from .then and .query methods
+            console.error(error);
+            client.end();
+        })
 }
 
 // function to initialize the app
 function init() {
-    // make connection to database
-    client.connect();
     // prompt user to perform operations
     promptUserForOperation();
 }
 
+// make connection to database
+client.connect();
 // init function call to initialize the app
 init();
