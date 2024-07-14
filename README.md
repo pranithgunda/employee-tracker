@@ -20,4 +20,4 @@ This command line application is built using node.js and leverages inquirer, pg 
 
 ## Link To Video Demonstration
 
-TBD
+https://drive.google.com/file/d/1QgMGhTsKA66QHQbnIU0pi_6xEJW_N5t8/view
