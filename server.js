@@ -1,7 +1,11 @@
 // Define all required dependencies
+// dotenv package for environment variables
 require('dotenv').config();
 const inquirer = require('inquirer');
+// npm package to support postgres
 const pg = require('pg');
+// npm package of displaying tables in cli
+const Table = require('cli-table');
 const { Client } = pg
 const { Department } = require('./lib/department');
 const { Role } = require('./lib/role');
@@ -9,8 +13,7 @@ const { Employee } = require('./lib/employee');
 const employee = new Employee();
 const role = new Role();
 const department = new Department();
-// npm package of displaying tables in cli
-const Table = require('cli-table');
+
 
 // Global variables
 let availableDepartments = [];
@@ -30,11 +33,11 @@ const operations = ['View All Employees',
 
 // client instance configuration to establish connection to db server
 const client = new Client({
-    user: 'postgres',
+    user: process.env.POSTGRESDBUSER,
     password: process.env.POSTGRESDBPWD,
-    host: 'localhost',
-    port: 5432,
-    database: 'employee_db'
+    host: process.env.POSTGRESDBHOST,
+    port: process.env.POSTGRESDBPORT,
+    database: process.env.POSTGRESDB
 })
 
 // function defined to display array as table to console output
@@ -122,16 +125,16 @@ function promptUserForOperation() {
                         {
                             type: "list",
                             message: "Which department does the role belong to?",
-                            name: "department",
+                            name: "department_id",
                             choices: availableDepartments
                         }
                     ])
                     .then(response => {
-                        if (response.role && response.salary && response.department) {
-                            client.query(department.getDepartmentID(), [response.department], (err, res) => {
-                                response.department = res.rows[0].id;
-                                if (response.department) {
-                                    const valuesToInsert = [response.role, response.salary, response.department];
+                        if (response.role && response.salary && response.department_id) {
+                            client.query(department.getDepartmentID(), [response.department_id], (err, res) => {
+                                response.department_id = res.rows[0].id;
+                                if (response.department_id) {
+                                    const valuesToInsert = [response.role, response.salary, response.department_id];
                                     client.query(role.addRole(), valuesToInsert, (err, res) => {
                                         console.log(`${response.role} added to database`);
                                         promptUserForOperation();
@@ -212,56 +215,58 @@ function promptUserForOperation() {
                     // reset array to empty
                     availableEmployees = [];
                     res.rows.forEach((row) => availableEmployees.push(row.employee_name));
-                // Get available roles
-                client.query(role.getRoles(),(err,res)=>{
-                    // reset array to empty
-                    availableRoles=[];
-                    res.rows.forEach((row) => availableRoles.push(row.title));
-                    inquirer
-                    .prompt([
-                        {
-                         type:"list",
-                         message:"Which employee's role do you want to update? ",
-                         name:"employee_id",
-                         choices:availableEmployees   
-                        },
-                        {
-                            type:"list",
-                            message:"Which role do you want to assign the selected employee?",
-                            name:"role_id",
-                            choices:availableRoles
-                        }
-                    ])
-                    .then(response =>{
-                        if(response.employee_id && response.role_id){
-                            client.query(employee.getEmployeeId(),[response.employee_id],(err,res)=>{
-                                response.employee_id = res.rows[0].id
-                                if(response.employee_id){
-                                    client.query(role.getRoleId(),[response.role_id],(err,res)=>{
-                                        response.role_id = res.rows[0].id
-                                        if(response.role_id){
-                                            client.query(employee.updateEmployeeRole(),[response.role_id,response.employee_id],(err,res)=>{
-                                                console.log('Updated employees role');
-                                                promptUserForOperation();
+                    // Get available roles
+                    client.query(role.getRoles(), (err, res) => {
+                        // reset array to empty
+                        availableRoles = [];
+                        res.rows.forEach((row) => availableRoles.push(row.title));
+                        inquirer
+                            .prompt([
+                                {
+                                    type: "list",
+                                    message: "Which employee's role do you want to update? ",
+                                    name: "employee_id",
+                                    choices: availableEmployees
+                                },
+                                {
+                                    type: "list",
+                                    message: "Which role do you want to assign the selected employee?",
+                                    name: "role_id",
+                                    choices: availableRoles
+                                }
+                            ])
+                            .then(response => {
+                                if (response.employee_id && response.role_id) {
+                                    client.query(employee.getEmployeeId(), [response.employee_id], (err, res) => {
+                                        response.employee_id = res.rows[0].id
+                                        if (response.employee_id) {
+                                            client.query(role.getRoleId(), [response.role_id], (err, res) => {
+                                                response.role_id = res.rows[0].id
+                                                if (response.role_id) {
+                                                    client.query(employee.updateEmployeeRole(), [response.role_id, response.employee_id], (err, res) => {
+                                                        console.log('Updated employees role');
+                                                        promptUserForOperation();
+                                                    })
+                                                }
                                             })
                                         }
                                     })
+
+                                }
+                                else {
+                                    console.log('Please select both employee and role to update')
                                 }
                             })
 
-                        }
-                        else{
-                            console.log('Please select both employee and role to update')
-                        }
+
                     })
-
-
-                })}
-                )}
+                }
+                )
+            }
             else {
-                        // If user selects quit, end the connection
-                        client.end();
-                    }
+                // If user selects quit, end the connection
+                client.end();
+            }
         })
         .catch(error => {
             // Handle all the errors from .then and .query methods
@@ -272,11 +277,11 @@ function promptUserForOperation() {
 
 // function to initialize the app
 function init() {
+    // make connection to database
+    client.connect();
     // prompt user to perform operations
     promptUserForOperation();
 }
 
-// make connection to database
-client.connect();
 // init function call to initialize the app
 init();
